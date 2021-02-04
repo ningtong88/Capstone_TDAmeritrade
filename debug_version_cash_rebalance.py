@@ -212,7 +212,8 @@ class initialize_df_continuous_generator:
         self.data = data
         self.portfolio_weights = portfolio_weights
         self.initial_money = initial_money
-        self.shares, self.latest_prices, self.date_start = allocate_shares_continuous(self.data,self.portfolio_weights,self.initial_money)
+        # self.shares, self.latest_prices, self.date_start = allocate_shares_continuous(self.data,self.portfolio_weights,self.initial_money)
+        self.shares, self.latest_prices, self.date_start =allocate_shares_sub(self.data,self.portfolio_weights).allocate_shares()
         self.df_cash_initial = pd.DataFrame(np.array([0]), columns = ['cash'], index = [self.date_start])
         for self.k in self.latest_prices.keys():
             self.ls_trades = self.ls_trades + [self.shares[self.k], self.latest_prices[self.k], -self.shares[self.k]*self.latest_prices[self.k], self.shares[self.k], self.shares[self.k]*self.latest_prices[self.k],0, 0]
@@ -234,18 +235,21 @@ class initialize_df_dicrete_generator(initialize_df_continuous_generator):
         super().__init__(data,portfolio_weights)
         self.ls_trades = []
         self.ls_tickers = []
-        self.shares, self.cash, self.srs_latest_prices, self.date_start = allocate_shares(self.data,self.portfolio_weights,self.initial_money)
+        # self.shares, self.cash, self.srs_latest_prices, self.date_start = allocate_shares(self.data,self.portfolio_weights,self.initial_money)
+        self.shares, self.cash, self.srs_latest_prices, self.date_start = allocate_shares_generator(self.data,self.portfolio_weights).allocate_shares()
         self.df_cash_initial = pd.DataFrame(self.cash, columns = ['cash'], index = [self.date_start])
         for self.k in self.srs_latest_prices.index:
             self.ls_trades = self.ls_trades + [self.shares[self.k], self.srs_latest_prices[self.k], -self.shares[self.k]*self.srs_latest_prices[self.k], self.shares[self.k], self.shares[self.k]*self.srs_latest_prices[self.k],0, 0]
             self.ls_tickers.append(self.k)
-        self.ls_trades_iterables = [self.ls_tickers, self.ls_labels]~
+        self.ls_trades_iterables = [self.ls_tickers, self.ls_labels]
         self.trades_columns = pd.MultiIndex.from_product(self.ls_trades_iterables, names=['ticker', 'metric'])
         #DataFrame requires [[list]] to make sure they know it is row rather than column
         self.df_trades_initial = pd.DataFrame(np.array([self.ls_trades]),columns=self.trades_columns, index = [self.date_start])
 # %%
 x = initialize_df_continuous_generator(d,portfolio_weights)
 print (x.df_trades_initial, x.df_cash_initial, x.df_portfolio_sum_initial, x.df_portfolio_detail_initial)
+# %%
+
 
 # %%
 y = initialize_df_dicrete_generator(d, portfolio_weights)
@@ -258,6 +262,8 @@ print (y.df_trades_initial, y.df_cash_initial, y.df_portfolio_sum_initial, y.df_
 def calendar_threshold_rebalance_discrete(data, portfolio_weights, initial_money=1000000, rebalance_days = 63, threshold = 1):
     trading_day_counter = 1
     df_trades, df_cash, df_portfolio_sum, df_portfolio_detail = initialize_df(data, portfolio_weights,initial_money= 1000000)
+    #why to convert to array and assign 0 at beginning
+    #is that because of day 1 is 0?
     arr_trades = np.append([[0]], np.array(df_trades), axis = 1)
     date_start = data.index[0].date().isoformat()
     arr_data_columns = data.columns.values
@@ -267,15 +273,16 @@ def calendar_threshold_rebalance_discrete(data, portfolio_weights, initial_money
     arr_port_det = np.zeros([data.shape[0], df_portfolio_detail.shape[1]])
     arr_port_sum = np.zeros([data.shape[0], df_portfolio_sum.shape[1]])
     arr_portfolio_weights = np.array([i for i in portfolio_weights.values()])
+    #why index be extracted
     ls_tickers = list(set([y[0] for x, y in enumerate(arr_data_columns)]))
     ls_prc_index = [x for x, y in enumerate(arr_data_columns) if y[1] == 'prc']
     ls_ret_index = [x for x, y in enumerate(arr_data_columns) if y[1] == 'ret']
     ls_retx_index = [x for x, y in enumerate(arr_data_columns) if y[1] == 'retx']
     ls_retd_index = [x for x, y in enumerate(arr_data_columns) if y[1] == 'retd']
-
     ls_trades_shr_index = [x+1 for x, y in enumerate(arr_trades_columns) if y[1] == 'tot shr']
 
     arr_yesterday_prices =  arr_data[0][ls_prc_index]
+    #cash the 1st row 1st column
     cash = df_cash.iloc[0][0]
     #This loop goes through the data set "d", which should be a daily time series of asset returns and prices.
     #Returns should be broken into returns including dividends, returns without dividends, and dividend only returns. 
@@ -382,6 +389,9 @@ def calendar_threshold_rebalance_discrete(data, portfolio_weights, initial_money
 # %%
 arr_port_det_disc, arr_port_sum_disc, arr_trades_disc, arr_cash_disc = calendar_threshold_rebalance_discrete(d, portfolio_weights, initial_money=1000000, rebalance_days = 45000, threshold = 5)
 
+# %%
+
+
 # %% [markdown]
 # # Functions to track dividend payments and rebalance using continuous assets
 # 
@@ -467,7 +477,7 @@ def calendar_threshold_rebalance_continuous(data, portfolio_weights, initial_mon
                                        |[Actual % of portfolio] / [target % of portfolio] - 1|
 
                 If this absolute value is greater than the threshold, rebalancing occurs. This sells all the shares and reblances 
-                using the original weights and the total value available. The share amount before rebalancing is then subtracted 
+                using the `original weights and the total value available. The share amount before rebalancing is then subtracted 
                 to find the total change in shares for each asset. The df_trades and df_cash dataframes are then updated.'''
 
         
