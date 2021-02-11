@@ -1,0 +1,6 @@
+spy,1
+tlt,2
+gld,3
+tsla,1
+pins,2
+aapl,1
